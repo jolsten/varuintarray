@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 import numpy.typing as npt
@@ -98,59 +98,31 @@ class VarUIntArray(np.ndarray):
 
         return result
 
+    def __array_function__(
+        self,
+        func: Callable[..., Any],
+        types: Iterable[type],
+        args: Iterable[Any],
+        kwargs: Mapping[str, Any],
+    ) -> Any:
+        if func is np.unpackbits:
+            array, *_ = args
+            if "axis" in kwargs:
+                msg = "axis keyword argument not valid when using np.unpackbits() on a VarUIntArray"
+                raise ValueError(msg)
+            return unpackbits(array)
+        return super().__array_function__(func, types, args, kwargs)
+
     def invert(self) -> np.ndarray:
         """Invert the bits in the array, respecting word_size."""
         return np.invert(self)
 
-    def unpack(self) -> np.ndarray:
-        """Unpack the bits in the array, respecting word_size.
-
-        Omits the pad bits used in the ndarray.
-        """
-        # Convert to a regular ndarray with 8-bit words
-        # this preps it for np.unpackbits
-        result = self.view(np.ndarray).view("u1")
-
-        # Unpack bits in each row
-        result = np.unpackbits(result, axis=1)
-
-        # Slice the "real" as indicated by word_size
-        # e.g. for a 10-bit word packed into a uint16, return the lower 10 bits
-        result = result.reshape(-1, self.itemsize * 8)[:, -self.word_size :]
-
-        # Return shape to proper number of rows
-        result = result.reshape(self.shape[0], self.shape[1] * self.word_size)
-
-        return result
+    def unpackbits(self) -> np.ndarray:
+        return unpackbits(self)
 
     @classmethod
-    def pack(cls, data: np.ndarray, word_size: int) -> "VarUIntArray":
-        """Pack an array into words of a specific size."""
-        data = np.asarray(data)
-
-        rows = data.shape[0]
-
-        # Reshape to one word per row
-        result = data.reshape(-1, word_size)
-
-        # Determine appropriate number of pad bits
-        mach_size = word_size_to_machine_size(word_size)
-        pad_size = mach_size - word_size
-
-        # Insert pad bits on left side
-        result = np.pad(result, ((0, 0), (pad_size, 0)), mode="constant")
-
-        # Convert padded binary into bytes
-        result = np.packbits(result)
-
-        # View packed bytes as appropriate uint dtype
-        dtype = ">" + word_size_to_dtype(word_size)
-        result = result.view(dtype)
-
-        # Reshape back to original number of rows
-        result = result.reshape(rows, -1)
-
-        return VarUIntArray(result, word_size=word_size)
+    def packbits(cls, data: np.ndarray) -> "VarUIntArray":
+        return packbits(data)
 
 
 def validate_varuintarray(data) -> VarUIntArray:
@@ -171,3 +143,65 @@ def serialize_varuintarray(data: VarUIntArray) -> dict[str, Any]:
         "word_size": data.word_size,
         "values": data.tolist(),
     }
+
+
+def unpackbits(array: VarUIntArray) -> np.ndarray:
+    """Unpack the bits in the array, respecting word_size.
+
+    Omits the pad bits used in the ndarray.
+    """
+    shape = array.shape
+    result = array.view(np.ndarray)
+
+    # Add a dimension such that each word is indexed in the innermost dimension
+    result = result.reshape(*shape, 1)
+
+    # Convert to a regular ndarray with 8-bit words
+    # this preps it for np.unpackbits
+    result = result.view("u1")
+
+    # Unpack bits in each word
+    result = np.unpackbits(result, axis=result.ndim - 1)
+
+    # Slice the array keeping everything except the pad bits in the deepest index level
+    # e.g. for a 10-bit word packed into a uint16, return the lower 10 bits
+    # The implementation here is an N-dimensional generalization of, e.g.
+    # 1-d array [:, -array.word_size:]
+    # 2-d array [:, :, -array.word_size:]
+    slices = (slice(None),) * (result.ndim - 1) + (slice(-array.word_size, None),)
+    result = result[slices]
+
+    return result
+
+
+def packbits(array: np.ndarray) -> VarUIntArray:
+    """Pack an array into a `VarUIntArray`.
+
+    The deepest dimension must index each bit within each individual word.
+
+    Inserts pad bits before packing into the appropriate dtype.
+    """
+    shape = array.shape
+    ndim = array.ndim
+    word_size = shape[-1]
+
+    # Determine appropriate number of pad bits
+    pad = word_size_to_machine_size(word_size) - word_size
+
+    # Dynamically create pad tuples
+    # 1. Pad 0 before, 0 after for each dimension except the last
+    # 2. Pad N before, 0 after for the last dimension to get to necessary machine word size
+    pad = ((0, 0),) * (ndim - 1) + ((pad, 0),)
+    result = np.pad(array, pad, mode="constant")
+
+    # Pack padded bits back into words
+    result = np.packbits(result, axis=-1)
+
+    # Convert to appropriate uint dtype
+    dtype = ">" + word_size_to_dtype(word_size)
+    result = result.view(dtype)
+
+    # Drop innermost dimension
+    result = result.squeeze(axis=-1)
+
+    return VarUIntArray(result, word_size=word_size)
