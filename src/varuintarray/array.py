@@ -83,6 +83,8 @@ class VarUIntArray(np.ndarray):
 
         result = super().__array_wrap__(obj, context, return_scalar)
 
+        print("abc")
+
         if context is not None:
             func, args, out_i = context
             # input_args = args[:func.nin]
@@ -91,10 +93,6 @@ class VarUIntArray(np.ndarray):
                 # Ensure the result of np.invert doesn't return pad bits as ones
                 result = np.bitwise_and(result.view(np.ndarray), 2**self.word_size - 1)
                 result = self.__class__(result, word_size=self.word_size)
-            # elif func is np.ascontiguousarray:
-            #     # TODO: Is this necessary?
-            #     result = np.ascontiguousarray(result)
-            #     result = self.__class__(result, word_size=self.word_size)
 
         return result
 

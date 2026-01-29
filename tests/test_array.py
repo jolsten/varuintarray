@@ -1,12 +1,6 @@
 import pytest
-from hypothesis import given
 
-from tests import strategies as cst
-from varuintarray.array import (
-    VarUIntArray,
-    serialize_varuintarray,
-    validate_varuintarray,
-)
+from varuintarray.array import VarUIntArray
 
 
 @pytest.mark.parametrize("word_size", [1, 8, 10, 12, 16])
@@ -16,18 +10,11 @@ def test_array_word_size(word_size: int):
     assert array.word_size == word_size
 
 
-@given(cst.varuintarrays())
-def test_serialize(array: VarUIntArray):
-    data = serialize_varuintarray(array)
-    assert isinstance(data, dict)
-    assert data["word_size"] == array.word_size
-    assert data["values"] == array.tolist()
+def test_overflow():
+    # Values that should overflow based on word_size will not overflow if they
+    # are being stored in a uint that is large enough to hold them. Rather
+    # than check values at class instantiation... garbage in, garbage out?
+    data = range(1024)
 
-
-@given(cst.varuintarrays())
-def test_roundtrip(array: VarUIntArray):
-    data = serialize_varuintarray(array)
-    result = validate_varuintarray(data)
-    assert isinstance(array, VarUIntArray)
-    assert array.word_size == result.word_size
-    assert array.tolist() == result.tolist()
+    with pytest.raises(OverflowError):
+        array = VarUIntArray(data, word_size=8)

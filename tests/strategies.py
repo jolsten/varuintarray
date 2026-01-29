@@ -1,9 +1,11 @@
 from typing import Optional
 
 from hypothesis import strategies as st
+from hypothesis.extra import numpy as nps
 
 from varuintarray.array import (
     VarUIntArray,
+    word_size_to_dtype,
 )
 
 MAX_BITS_PER_WORD = 64
@@ -15,11 +17,14 @@ def varuintarrays(draw, word_size: Optional[int] = None) -> VarUIntArray:
         size: int = draw(st.integers(min_value=1, max_value=MAX_BITS_PER_WORD))
     else:
         size = word_size
-    values = draw(
-        st.lists(
-            st.integers(min_value=0, max_value=2**size - 1),
-            min_size=1,
-            max_size=1024,
+
+    dtype = word_size_to_dtype(size)
+
+    data = draw(
+        nps.arrays(
+            dtype=dtype,
+            shape=nps.array_shapes(min_dims=0, max_dims=2, min_side=1, max_side=1024),
         )
     )
-    return VarUIntArray(values, word_size=size)
+
+    return VarUIntArray(data, word_size=size)
