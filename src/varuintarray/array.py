@@ -116,10 +116,12 @@ class VarUIntArray(np.ndarray):
         return np.invert(self)
 
     def unpackbits(self) -> np.ndarray:
+        """Unpack the bits in each word, respecting word_size."""
         return unpackbits(self)
 
     @classmethod
     def packbits(cls, data: np.ndarray) -> "VarUIntArray":
+        """Pack an `np.ndarray` into a `VarUIntArray`."""
         return packbits(data)
 
 
@@ -146,7 +148,24 @@ def serialize_varuintarray(data: VarUIntArray) -> dict[str, Any]:
 def unpackbits(array: VarUIntArray) -> np.ndarray:
     """Unpack the bits in the array, respecting word_size.
 
-    Omits the pad bits used in the ndarray.
+    Works like `np.unpackbits`, but uses word_size.
+
+    The resulting `np.ndarray` will have one additional dimension. The new
+    (innermost) dimension will have size equal to array.word_size.
+
+    Args:
+        array: The array to unpack.
+
+    Returns:
+        The unpacked bits.
+
+    Notes:
+        This replicates the functionality of `np.unpackbits` but uses the
+        word_size attribute to omit the pad bits used in the underlying
+        numpy dtype.
+
+        Additionally, using the innermost dimension removes ambiguity about
+        the VarUIntArray word_size.
     """
     shape = array.shape
     result = array.view(np.ndarray)
@@ -173,11 +192,22 @@ def unpackbits(array: VarUIntArray) -> np.ndarray:
 
 
 def packbits(array: np.ndarray) -> VarUIntArray:
-    """Pack an array into a `VarUIntArray`.
+    """Pack an `np.ndarray` into a `VarUIntArray`.
 
-    The deepest dimension must index each bit within each individual word.
+    This works for N-dimensional arrays, but the last (innermost) dimension
+    must contain the bits within each word. The word_size attribute is
+    determined by the size of the last dimension (i.e. array.shape[-1]).
 
-    Inserts pad bits before packing into the appropriate dtype.
+    The resulting `VarUIntArray` will have ndim one less than the input array.
+
+    The input array, like for np.packbits, must have dtype np.uint8 and contain
+    only zeros and ones.
+
+    Args:
+        array: The array containing bits to pack.
+
+    Returns:
+        The packed binary result.
     """
     shape = array.shape
     ndim = array.ndim
