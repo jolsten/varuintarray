@@ -1,3 +1,3 @@
-from varuintarray.array import VarUIntArray
+from varuintarray.array import VarUIntArray, packbits, unpackbits
 
-__all__ = ["VarUIntArray"]
+__all__ = ["VarUIntArray", "unpackbits", "packbits"]

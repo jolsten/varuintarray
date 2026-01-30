@@ -1,7 +1,9 @@
+from typing import Callable
+
 import numpy as np
 import pytest
 
-from varuintarray.array import VarUIntArray
+from varuintarray.array import VarUIntArray, word_size_to_dtype
 
 
 @pytest.mark.parametrize(
@@ -32,3 +34,38 @@ class TestInvert:
         array = VarUIntArray(np.full((100, 50), value, dtype=int), word_size=word_size)
         result = array.invert()
         assert [inverted == r for r in result.flatten()]
+
+
+@pytest.mark.parametrize("word_size", [1, 4, 8, 10, 12, 16, 24, 32])
+@pytest.mark.parametrize(
+    "ufunc, args",
+    [
+        # Arithmetic
+        (np.add, [1]),
+        (np.subtract, [1]),
+        (np.multiply, [2]),
+        (np.divide, [2]),
+        (np.floor_divide, [2]),
+        (np.power, [2]),
+        (np.remainder, [2]),
+        (np.mod, [2]),
+        (np.fmod, [2]),
+        (np.negative, []),
+        (np.positive, []),
+        (np.abs, []),
+        (np.absolute, []),
+        # Bitwise operations
+        (np.invert, []),
+        (np.bitwise_invert, []),
+        (np.bitwise_xor, [0xFF]),
+        (np.bitwise_and, [0xAA]),
+        (np.bitwise_left_shift, [2]),
+        (np.bitwise_right_shift, [2]),
+    ],
+)
+def test_ufunc_result_type(word_size: int, ufunc: Callable, args):
+    dtype = word_size_to_dtype(word_size)
+    data = np.random.default_rng().integers(0, 2**word_size, size=10, dtype=dtype)
+    array = VarUIntArray(data, word_size=word_size)
+    result = ufunc(array, *args)
+    assert isinstance(result, VarUIntArray)
