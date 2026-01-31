@@ -1,4 +1,4 @@
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Callable, Iterable, Literal, Mapping, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -121,6 +121,17 @@ class VarUIntArray(np.ndarray):
     def packbits(cls, data: np.ndarray) -> "VarUIntArray":
         """Pack an `np.ndarray` into a `VarUIntArray`."""
         return packbits(data)
+
+    def takeskip(
+        self,
+        instruction: str,
+        mode: Literal["word", "row"],
+        word_size: Optional[int] = None,
+    ) -> "VarUIntArray":
+        """Perform a Take-Skip operation."""
+        from varuintarray.takeskip import takeskip
+
+        return takeskip(instruction, self, mode=mode, word_size=word_size)
 
 
 def validate_varuintarray(data) -> VarUIntArray:
