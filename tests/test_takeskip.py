@@ -3,14 +3,14 @@ import pytest
 
 from varuintarray.array import VarUIntArray
 from varuintarray.takeskip import (
-    Instruction,
+    Command,
     Invert,
     Ones,
     Reverse,
     Skip,
     Take,
     Zeros,
-    _parse_instruction,
+    _parse_command,
     takeskip,
 )
 
@@ -22,13 +22,13 @@ from varuintarray.takeskip import (
         ("i8", [Invert(8)]),
         ("t4", [Take(4)]),
         ("r8", [Reverse(8)]),
-        ("o8", [Ones(8)]),
+        ("n8", [Ones(8)]),
         ("z8", [Zeros(8)]),
         ("s1 t8 s1", [Skip(1), Take(8), Skip(1)]),
     ],
 )
-def test_parser(s: str, expected: list[Instruction]):
-    instructions = _parse_instruction(s)
+def test_parser(s: str, expected: list[Command]):
+    instructions = _parse_command(s)
     assert instructions == expected
 
 
