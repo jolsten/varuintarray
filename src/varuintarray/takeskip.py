@@ -233,6 +233,7 @@ def takeskip(
     array: VarUIntArray,
     *,
     mode: Literal["word", "row"],
+    remnant: Literal[None, "remove", "keep", "pad"] = None,
     word_size: Optional[int] = None,
 ) -> VarUIntArray:
     """Perform a take-skip style operation.
