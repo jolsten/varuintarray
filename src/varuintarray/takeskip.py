@@ -1,15 +1,19 @@
-import re
+import pathlib
 from abc import abstractmethod
-from typing import Literal, Optional
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
+from lark import Lark, Transformer, v_args
 
 from varuintarray.array import VarUIntArray, packbits, unpackbits
 
+grammar = (pathlib.Path(__file__).parent / "takeskip.lark").read_text()
+command_parser = Lark(grammar, parser="earley")
+
 
 class Command:
-    def __init__(self, value: int) -> None:
-        self.value = int(value)
+    def __init__(self, value: Any) -> None:
+        self.value = value
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.value})"
@@ -38,19 +42,10 @@ class Command:
     def __call__(self, array: np.ndarray) -> Optional[np.ndarray]: ...
 
 
-INSTRUCTION_REGISTRY: dict[str, type[Command]] = {}
-
-
-def register(token: str):
-    def decorator(cls: type[Command]):
-        INSTRUCTION_REGISTRY[token] = cls
-        return cls
-
-    return decorator
-
-
-@register("t")
 class Take(Command):
+    def __init__(self, value: int) -> None:
+        self.value = int(value)
+
     @property
     def result_size(self) -> int:
         return self.value
@@ -59,8 +54,10 @@ class Take(Command):
         return array
 
 
-@register("s")
 class Skip(Command):
+    def __init__(self, value: int) -> None:
+        self.value = int(value)
+
     @property
     def result_size(self) -> int:
         return 0
@@ -69,13 +66,11 @@ class Skip(Command):
         return None
 
 
-@register("i")
 class Invert(Take):
     def __call__(self, array: np.ndarray) -> Optional[np.ndarray]:
         return np.bitwise_xor(array, np.uint8(1))
 
 
-@register("r")
 class Reverse(Take):
     def __call__(self, array: np.ndarray) -> Optional[np.ndarray]:
         return array[..., ::-1]
@@ -91,53 +86,128 @@ class Pad(Command):
         return self.value
 
 
-@register("n")
 class Ones(Pad):
     def __call__(self, array: np.ndarray) -> Optional[np.ndarray]:
         return np.ones((*array.shape[0:-1], self.value), dtype="u1")
 
 
-@register("z")
 class Zeros(Pad):
     def __call__(self, array: np.ndarray) -> Optional[np.ndarray]:
         return np.zeros((*array.shape[0:-1], self.value), dtype="u1")
 
 
-INSTRUCTION_TOKEN_RE = re.compile(r"\s*([a-z])(\d+)", re.IGNORECASE)
+class Data(Pad):
+    def __init__(self, value: str) -> None:
+        self.value = str(value)
+
+    def __call__(self, array: np.ndarray) -> Optional[np.ndarray]:
+        raise NotImplementedError
 
 
-def _parse_command(s: str) -> list[Command]:
-    pos = 0
-    commands = []
-    while True:
-        # Search for next token, starting after last token
-        m = INSTRUCTION_TOKEN_RE.match(s, pos)
+class Permute(Command):
+    def __init__(self, args: Union[int, tuple[int, int]]) -> None:
+        self.value = args
 
-        if not m:
-            # If remaining text is only whitespace, we're done
-            if s[pos:].strip() == "":
-                return commands
+    def __call__(self, array: np.ndarray) -> Optional[np.ndarray]:
+        raise NotImplementedError
 
-            # Otherwise, report precise failure
-            raise ValueError(
-                f"Invalid token starting at position {pos}: {s[pos : pos + 10]!r}"
-            )
 
-        # Set new end position
-        pos = m.end()
+def one_based_range_to_indices(start, end):
+    """
+    Convert one-based range to zero-based indices.
 
-        # Convert text token into components, construct Command object
-        type_, value = m.groups()
-        type_ = type_.lower()
-        value = int(value)
+    Args:
+        start: One-based start position (integer)
+        end: One-based end position (integer)
 
-        if type_ not in INSTRUCTION_REGISTRY:
-            msg = f"Invalid token starting at position {pos}: {s[pos : pos + 10]!r}"
-            raise ValueError(msg)
+    Returns:
+        List of zero-based indices
 
-        cls = INSTRUCTION_REGISTRY[type_]
-        command = cls(value)
-        commands.append(command)
+    Examples:
+        1-4 -> [0, 1, 2, 3]
+        4-1 -> [3, 2, 1, 0]
+        5-5 -> [4]
+    """
+    # Convert to zero-based
+    start_idx = start - 1
+    end_idx = end - 1
+
+    # Determine step direction
+    step = 1 if start <= end else -1
+    return np.arange(start_idx, end_idx + step, step)
+
+
+class CommandParser(Transformer):
+    @v_args(inline=True)
+    def integer(self, s: str):
+        return int(s)
+
+    def flatten(self, args):
+        result = []
+        for item in args:
+            if isinstance(item, list):
+                result.extend(item)
+            else:
+                result.append(item)
+        return result
+
+    def repeat(self, args):
+        print(repr(args))
+        *commands, n = args
+        return commands * n
+
+    @v_args(inline=True)
+    def take(self, n: int) -> Take:
+        return Take(n)
+
+    @v_args(inline=True)
+    def skip(self, n: int) -> Skip:
+        return Skip(n)
+
+    @v_args(inline=True)
+    def invert(self, n: int) -> Invert:
+        return Invert(n)
+
+    @v_args(inline=True)
+    def reverse(self, n: int) -> Reverse:
+        return Reverse(n)
+
+    @v_args(inline=True)
+    def zero_pad(self, n: int) -> Zeros:
+        return Zeros(n)
+
+    @v_args(inline=True)
+    def one_pad(self, n: int) -> Ones:
+        return Ones(n)
+
+    @v_args(inline=True)
+    def data_pad(self, s: str) -> Data:
+        return Data(s)
+
+    @v_args(inline=True)
+    def range(self, a, b) -> tuple[int, int]:
+        return one_based_range_to_indices(a, b)
+
+    @v_args(inline=True)
+    def csv(self, first, *rest) -> list[int]:
+        result = [first]
+        for x in rest:
+            if isinstance(x, list):
+                result.extend(x)
+            elif isinstance(x, tuple):
+                result.append(x)
+            else:
+                result.append(x)
+        return result
+
+    @v_args(inline=True)
+    def permute(self, args) -> Permute:
+        return Permute(args)
+
+
+def parse_command(s: str) -> list[Command]:
+    tree = command_parser.parse(s)
+    return CommandParser().transform(tree)
 
 
 def takeskip(
@@ -190,7 +260,7 @@ def takeskip(
     if word_size is None:
         word_size = array.word_size
 
-    commands = _parse_command(command)
+    commands = parse_command(command)
     unpacked = unpackbits(array)
     result_size = sum(i.result_size for i in commands)
 

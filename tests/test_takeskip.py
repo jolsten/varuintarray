@@ -10,7 +10,7 @@ from varuintarray.takeskip import (
     Skip,
     Take,
     Zeros,
-    _parse_command,
+    parse_command,
     takeskip,
 )
 
@@ -28,7 +28,7 @@ from varuintarray.takeskip import (
     ],
 )
 def test_parser(s: str, expected: list[Command]):
-    instructions = _parse_command(s)
+    instructions = parse_command(s)
     assert instructions == expected
 
 
