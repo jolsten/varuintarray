@@ -105,11 +105,29 @@ class Data(Pad):
 
 
 class Permute(Command):
-    def __init__(self, args: Union[int, tuple[int, int]]) -> None:
-        self.value = args
+    def __init__(self, args: list[Union[int, tuple[int, int]]]) -> None:
+        results = []
+        for item in args:
+            if isinstance(item, np.ndarray):
+                results.append(item)
+            elif isinstance(item, int):
+                idx = np.array([item], dtype="int64")
+                results.append(idx)
+            else:
+                raise TypeError
+        self.value = np.concatenate(results)
+
+    @property
+    def input_size(self) -> int:
+        # TODO: Do you skip ahead after the permute command or what?
+        return 0
+
+    @property
+    def result_size(self) -> int:
+        return len(self.value)
 
     def __call__(self, array: np.ndarray) -> Optional[np.ndarray]:
-        raise NotImplementedError
+        return array[..., self.value]
 
 
 def one_based_range_to_indices(start, end):
@@ -192,10 +210,10 @@ class CommandParser(Transformer):
     def csv(self, first, *rest) -> list[int]:
         result = [first]
         for x in rest:
-            if isinstance(x, list):
-                result.extend(x)
-            elif isinstance(x, tuple):
-                result.append(x)
+            if isinstance(x, int):
+                # convert to zero-based
+                idx = np.array([x - 1], dtype="int64")
+                result.append(idx)
             else:
                 result.append(x)
         return result
@@ -272,6 +290,7 @@ def takeskip(
         # Reshape into a 2-d array where dimension 2 has length == array.word_size
         unpacked = unpacked.reshape(-1, array.word_size)
     elif mode == "row":
+        # TODO: Add mode to discard extra bits instead
         if array.shape[-1] * word_size != result_size:
             msg = (
                 f"Command does not result in a size with length equal to an integer "
