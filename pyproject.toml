@@ -1,6 +1,6 @@
 [project]
 name = "varuintarray"
-version = "0.1.0b1"
+version = "0.1.0b5"
 description = "A variable-length unsinged integer array"
 readme = "README.md"
 authors = [
