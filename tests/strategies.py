@@ -5,7 +5,7 @@ from hypothesis.extra import numpy as nps
 
 from varuintarray.array import (
     VarUIntArray,
-    word_size_to_dtype,
+    _word_size_to_dtype,
 )
 
 MAX_BITS_PER_WORD = 64
@@ -18,7 +18,7 @@ def varuintarrays(draw, word_size: Optional[int] = None) -> VarUIntArray:
     else:
         size = word_size
 
-    dtype = word_size_to_dtype(size)
+    dtype = _word_size_to_dtype(size)
 
     data = draw(
         nps.arrays(

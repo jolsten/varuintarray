@@ -4,7 +4,7 @@ import numpy as np
 import numpy.typing as npt
 
 
-def _word_size_to_machine_size(size: int) -> int:
+def __word_size_to_machine_size(size: int) -> int:
     """Find the smallest machine size that contains the input size.
 
     Determine the machine word size (8, 16, 32, 64, 128) appropriate for an
@@ -21,9 +21,9 @@ def _word_size_to_machine_size(size: int) -> int:
         ValueError: If size is <= 0 or > 64.
 
     Examples:
-        >>> _word_size_to_machine_size(10)
+        >>> __word_size_to_machine_size(10)
         16
-        >>> _word_size_to_machine_size(5)
+        >>> __word_size_to_machine_size(5)
         8
     """
     if size <= 0:
@@ -41,7 +41,7 @@ def _word_size_to_machine_size(size: int) -> int:
     raise ValueError(msg)
 
 
-def _word_size_to_dtype(size: int) -> str:
+def __word_size_to_dtype(size: int) -> str:
     """Get numpy dtype string for a given word size.
 
     Converts a word size in bits to the corresponding numpy unsigned integer
@@ -55,12 +55,12 @@ def _word_size_to_dtype(size: int) -> str:
         needed to store the word size.
 
     Examples:
-        >>> _word_size_to_dtype(10)
+        >>> __word_size_to_dtype(10)
         'u2'
-        >>> _word_size_to_dtype(5)
+        >>> __word_size_to_dtype(5)
         'u1'
     """
-    return f"u{_word_size_to_machine_size(size) // 8}"
+    return f"u{__word_size_to_machine_size(size) // 8}"
 
 
 class VarUIntArray(np.ndarray):
@@ -96,7 +96,7 @@ class VarUIntArray(np.ndarray):
         """
         # Input array is an already formed ndarray instance
         # We first cast to be our class type
-        dtype = ">" + _word_size_to_dtype(word_size)
+        dtype = ">" + __word_size_to_dtype(word_size)
 
         obj = np.asarray(input_array, dtype=dtype).view(cls)
 
@@ -362,7 +362,7 @@ def packbits(array: np.ndarray) -> VarUIntArray:
     word_size = shape[-1]
 
     # Determine appropriate number of pad bits
-    pad = _word_size_to_machine_size(word_size) - word_size
+    pad = __word_size_to_machine_size(word_size) - word_size
 
     # Dynamically create pad tuples
     # 1. Pad 0 before, 0 after for each dimension except the last
@@ -374,7 +374,7 @@ def packbits(array: np.ndarray) -> VarUIntArray:
     result = np.packbits(result, axis=-1)
 
     # Convert to appropriate uint dtype
-    dtype = ">" + _word_size_to_dtype(word_size)
+    dtype = ">" + __word_size_to_dtype(word_size)
     result = result.view(dtype)
 
     # Drop innermost dimension
