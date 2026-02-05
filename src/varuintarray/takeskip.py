@@ -32,11 +32,14 @@ class Command:
 
     @property
     def input_size(self) -> int:
+        """The consumed number of input bits."""
         return self.value
 
     @property
     @abstractmethod
-    def result_size(self) -> int: ...
+    def result_size(self) -> int:
+        """The output number of bits."""
+        ...
 
     @abstractmethod
     def __call__(self, array: np.ndarray) -> Optional[np.ndarray]: ...
@@ -74,6 +77,19 @@ class Invert(Take):
 class Reverse(Take):
     def __call__(self, array: np.ndarray) -> Optional[np.ndarray]:
         return array[..., ::-1]
+
+
+class Backup(Command):
+    def __init__(self, value: Any) -> None:
+        self.value = int(value)
+
+    @property
+    def input_size(self) -> int:
+        return -self.value
+
+    @property
+    def result_size(self) -> int:
+        return 0
 
 
 class Pad(Command):
@@ -119,8 +135,7 @@ class Permute(Command):
 
     @property
     def input_size(self) -> int:
-        # TODO: Do you skip ahead after the permute command or what?
-        return 0
+        return max(self.value) + 1
 
     @property
     def result_size(self) -> int:
@@ -233,7 +248,7 @@ def takeskip(
     array: VarUIntArray,
     *,
     mode: Literal["word", "row"],
-    remnant: Literal[None, "remove", "keep", "pad"] = None,
+    remnant: Literal["remove", "keep", "pad"] = "remove",
     word_size: Optional[int] = None,
 ) -> VarUIntArray:
     """Perform a take-skip style operation.
@@ -279,6 +294,10 @@ def takeskip(
     if word_size is None:
         word_size = array.word_size
 
+    if remnant not in [None, "remove", "keep", "pad"]:
+        msg = "invalid remnant argument"
+        raise ValueError(msg)
+
     commands = parse_command(command)
     unpacked = unpackbits(array)
     result_size = sum(i.result_size for i in commands)
@@ -288,24 +307,27 @@ def takeskip(
         raise ValueError(msg)
 
     if mode == "word":
-        # Reshape into a 2-d array where dimension 2 has length == array.word_size
-        unpacked = unpacked.reshape(-1, array.word_size)
+        # Input length in bits is the word size
+        input_size = array.word_size
     elif mode == "row":
-        # TODO: Add mode to discard extra bits instead
-        if array.shape[-1] * word_size != result_size:
-            msg = (
-                f"Command does not result in a size with length equal to an integer "
-                f"multiple of the input array (word_size={word_size}), try adding "
-                "pad bits or changing the desired output word_size."
-            )
-            raise ValueError(msg)
-        # Reshape into a 2-d array where dimension 2 has length == array.word_size * num elements per row
-        unpacked = unpacked.reshape(-1, array.shape[-1] * array.word_size)
+        # Input length in bits is the word size * number of elements in final dimension of input array
+        input_size = array.word_size * array.shape[-1]
     else:
         msg = f"""valid mode choices include: "word" and "row", not {mode!r}"""
         raise ValueError(msg)
 
-    result = np.zeros([*unpacked.shape[:-1], result_size], dtype="u1")
+    # Reshape into one input length per row
+    unpacked = unpacked.reshape(-1, input_size)
+
+    # Determine the command's resulting output length in bits
+    if remnant == "remove":
+        output_size = result_size
+    else:
+        # If "keep" or "pad", ensure the output size is the input size, plus any additional bits
+        # added by backing up in the stream
+        delta_size = sum([c.value for c in commands if isinstance(c, Backup)])
+        output_size = input_size + delta_size
+    result = np.zeros([*unpacked.shape[:-1], output_size], dtype="u1")
 
     in_ptr = 0
     out_ptr = 0
@@ -317,10 +339,12 @@ def takeskip(
         in_ptr += cmd.input_size
         out_ptr += cmd.result_size
 
+    if remnant == "keep":
+        result[:, out_ptr:] = unpacked[:, out_ptr:]
+
     if mode == "word":
         result = result.reshape(*array.shape, result_size)
-
     elif mode == "row":
-        result = result.reshape(*array.shape[0:-1], -1, word_size)
+        result = result.reshape(*array.shape[0:-1], -1, result_size)
 
     return packbits(result)

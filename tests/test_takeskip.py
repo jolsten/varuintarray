@@ -84,3 +84,16 @@ def test_r8(word_size: int, value: int, reverse: int):
     out = takeskip(f"r{word_size}", array, mode="word")
     assert out.word_size == word_size
     assert out.tolist() == [reverse] * LEN
+
+
+class TestComplex1:
+    def setup_class(self):
+        self.unpacked = VarUIntArray([0xAF, 0x0A], word_size=8)
+
+    def test_permute_1(self):
+        out = takeskip("p1-4", self.unpacked, mode="row")
+        assert out.tolist() == [0xA]
+
+    def test_permute_2(self):
+        out = takeskip("p4-1", self.unpacked, mode="row")
+        assert out.tolist == [0xF]
