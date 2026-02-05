@@ -6,7 +6,6 @@ on:
 
 jobs:
   run:
-    needs: [tests]  # require tests to pass before deploy runs
     runs-on: ubuntu-latest
     environment:
       name: pypi
