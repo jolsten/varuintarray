@@ -5,7 +5,7 @@ on:
     types: [published]
 
 jobs:
-  run:
+  publish:
     runs-on: ubuntu-latest
     environment:
       name: pypi
