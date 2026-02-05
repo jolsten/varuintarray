@@ -7,7 +7,11 @@ on:
       - v*
 
 jobs:
+  tests:
+    uses: ./.github/workflows/ci.yml  # use the callable tests job to run tests
+  
   run:
+    needs: [tests]  # require tests to pass before deploy runs
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -17,7 +21,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        
+
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
