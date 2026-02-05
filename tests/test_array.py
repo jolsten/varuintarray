@@ -2,8 +2,8 @@ import pytest
 
 from varuintarray.array import (
     VarUIntArray,
-    word_size_to_dtype,
-    word_size_to_machine_size,
+    _word_size_to_dtype,
+    _word_size_to_machine_size,
 )
 
 
@@ -17,7 +17,7 @@ from varuintarray.array import (
     ],
 )
 def test_word_size_to_machine_size(word_size: int, mach_size: int):
-    assert word_size_to_machine_size(word_size) == mach_size
+    assert _word_size_to_machine_size(word_size) == mach_size
 
 
 @pytest.mark.parametrize(
@@ -29,7 +29,7 @@ def test_word_size_to_machine_size(word_size: int, mach_size: int):
     ],
 )
 def test_word_size_to_dtype(word_size: int, dtype: str):
-    result_dtype = word_size_to_dtype(word_size)
+    result_dtype = _word_size_to_dtype(word_size)
     assert dtype == result_dtype
 
 
