@@ -3,7 +3,7 @@ from typing import Callable
 import numpy as np
 import pytest
 
-from varuintarray.array import VarUIntArray, __word_size_to_dtype
+from varuintarray.array import VarUIntArray, _word_size_to_dtype
 
 
 @pytest.mark.parametrize(
@@ -64,7 +64,7 @@ class TestInvert:
     ],
 )
 def test_ufunc_result_type(word_size: int, ufunc: Callable, args):
-    dtype = __word_size_to_dtype(word_size)
+    dtype = _word_size_to_dtype(word_size)
     data = np.random.default_rng().integers(0, 2**word_size, size=10, dtype=dtype)
     array = VarUIntArray(data, word_size=word_size)
     result = ufunc(array, *args)
