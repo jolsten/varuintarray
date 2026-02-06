@@ -3,14 +3,14 @@ from hypothesis import given
 from tests import strategies as cst
 from varuintarray.array import (
     VarUIntArray,
-    serialize_varuintarray,
-    validate_varuintarray,
+    serialize,
+    validate,
 )
 
 
 @given(cst.varuintarrays())
 def test_serialize(array: VarUIntArray):
-    data = serialize_varuintarray(array)
+    data = serialize(array)
     assert isinstance(data, dict)
     assert data["word_size"] == array.word_size
     assert data["values"] == array.tolist()
@@ -18,8 +18,8 @@ def test_serialize(array: VarUIntArray):
 
 @given(cst.varuintarrays())
 def test_roundtrip(array: VarUIntArray):
-    data = serialize_varuintarray(array)
-    result = validate_varuintarray(data)
+    data = serialize(array)
+    result = validate(data)
     assert isinstance(array, VarUIntArray)
     assert array.word_size == result.word_size
     assert array.tolist() == result.tolist()
