@@ -69,3 +69,4 @@ def test_ufunc_result_type(word_size: int, ufunc: Callable, args):
     array = VarUIntArray(data, word_size=word_size)
     result = ufunc(array, *args)
     assert isinstance(result, VarUIntArray)
+    assert result.word_size == array.word_size
