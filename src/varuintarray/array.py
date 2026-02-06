@@ -63,6 +63,20 @@ def _word_size_to_dtype(size: int) -> str:
     return f"u{_word_size_to_machine_size(size) // 8}"
 
 
+# ufuncs that can introduce bits beyond word_size
+_ufuncs_that_need_masking = (
+    np.invert,
+    np.bitwise_invert,
+    np.bitwise_or,
+    np.bitwise_xor,
+    np.left_shift,
+    np.add,
+    np.subtract,
+    np.multiply,
+    # Potentially others?
+)
+
+
 class VarUIntArray(np.ndarray):
     """Variable-length Unsigned Integer Array.
 
@@ -158,9 +172,10 @@ class VarUIntArray(np.ndarray):
             func, args, out_i = context
             # input_args = args[:func.nin]
 
-            if func in (np.invert, np.bitwise_invert):
-                # Ensure the result of np.invert doesn't return pad bits as ones
-                result = np.bitwise_and(result.view(np.ndarray), 2**self.word_size - 1)
+            if func in _ufuncs_that_need_masking:
+                # Ensure ufuncs don't erroneously activate pad bits
+                mask = 2**self.word_size - 1
+                result = np.bitwise_and(result.view(np.ndarray), mask)
                 return self.__class__(result, word_size=self.word_size)
 
         return result
@@ -225,8 +240,34 @@ class VarUIntArray(np.ndarray):
         """
         return packbits(data)
 
+    def to_dict(self) -> dict:
+        return serialize(self)
 
-def validate_varuintarray(data) -> VarUIntArray:
+    @staticmethod
+    def from_dict(data: dict) -> "VarUIntArray":
+        """Validate and convert data to a VarUIntArray.
+
+        Args:
+            data: Either a VarUIntArray instance or a dictionary containing
+                'values' and 'word_size' keys.
+
+        Returns:
+            A validated VarUIntArray instance.
+
+        Raises:
+            TypeError: If data cannot be converted to a VarUIntArray.
+
+        Examples:
+            >>> arr = VarUIntArray([1, 2, 3], word_size=10)
+            >>> validate_varuintarray(arr) is arr
+            True
+            >>> validate_varuintarray({"values": [1, 2, 3], "word_size": 10})
+            VarUIntArray([1, 2, 3], dtype='>u2', word_size=10)
+        """
+        return validate(data)
+
+
+def validate(data) -> VarUIntArray:
     """Validate and convert data to a VarUIntArray.
 
     Args:
@@ -258,7 +299,7 @@ def validate_varuintarray(data) -> VarUIntArray:
     raise TypeError(msg)
 
 
-def serialize_varuintarray(data: VarUIntArray) -> dict[str, Any]:
+def serialize(data: VarUIntArray) -> dict[str, Any]:
     """Serialize a VarUIntArray to a dictionary.
 
     Converts a VarUIntArray to a JSON-serializable dictionary format.
