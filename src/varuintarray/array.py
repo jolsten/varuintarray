@@ -262,8 +262,8 @@ class VarUIntArray(np.ndarray):
         """
         return serialize(self)
 
-    @staticmethod
-    def from_dict(data: dict) -> "VarUIntArray":
+    @classmethod
+    def from_dict(cls, data: dict) -> "VarUIntArray":
         """Validate and convert data to a VarUIntArray.
 
         Args:
