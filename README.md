@@ -27,29 +27,33 @@ pip install varuintarray
 
 ## Quick Start
 
+### Create a VarUIntArray with 10-bit words
+
 ```python
-import numpy as np
-from varuintarray import VarUIntArray
+>>> arr = VarUIntArray([1, 2, 1023], word_size=10)
+>>> arr
+VarUIntArray([   1,    2, 1023], dtype='>u2', word_size=10)
+```
 
-# Create a VarUIntArray with 10-bit words
-arr = VarUIntArray([1, 2, 1023], word_size=10)
-print(arr)
-# VarUIntArray([  1,   2, 1023], dtype='>u2', word_size=10)
+### Bitwise operations respect word_size
+```python
+>>> inverted = arr.invert()
+>>> inverted
+VarUIntArray([1022, 1021,    0], dtype='>u2', word_size=10)
+```
 
-# Bitwise operations respect word_size
-inverted = arr.invert()
-print(inverted)
-# VarUIntArray([1022, 1021,    0], dtype='>u2', word_size=10)
+### Unpack to individual bits
+```python
+>>> bits = arr.unpackbits()
+>>> bits.shape
+(3, 10)
+```
 
-# Unpack to individual bits
-bits = arr.unpackbits()
-print(bits.shape)
-# (3, 10)  # 3 words, 10 bits each
-
-# Pack bits back into words
-packed = VarUIntArray.packbits(bits)
-print(packed)
-# VarUIntArray([  1,   2, 1023], dtype='>u2', word_size=10)
+### Pack bits back into words
+```python
+>>> packed = VarUIntArray.packbits(bits)
+>>> packed
+VarUIntArray([  1,   2, 1023], dtype='>u2', word_size=10)
 ```
 
 ## Core Concepts
@@ -68,13 +72,15 @@ The most important feature is correct handling of padding bits during bitwise op
 
 ```python
 # 3-bit word stored in 8-bit container
-arr = VarUIntArray([5], word_size=3)  # Binary: 101
+>>> arr = VarUIntArray([5], word_size=3)  # Binary: 101
 
 # Standard NumPy invert would give 11111010 (250)
 # VarUIntArray.invert() gives 010 (2) - correct for 3-bit word
-inverted = arr.invert()
-print(inverted[0])  # 2, not 250
+>>> inverted = arr.invert()
+>>> int(inverted[0])
+2
 ```
+
 
 ## API Reference
 
@@ -95,6 +101,10 @@ VarUIntArray(input_array, word_size)
 - `invert()`: Bitwise invert respecting word_size
 - `unpackbits()`: Unpack to individual bits (adds one dimension)
 - `packbits(data)`: Class method to pack bit array into VarUIntArray
+- `to_dict()`: Serialize to a dictionary
+- `from_dict(data)`: Static method to deserialize from a dictionary
+- `to_json()`: Serialize to a JSON string
+- `from_json(string)`: Class method to deserialize from a JSON string
 
 #### Attributes
 
@@ -107,10 +117,10 @@ VarUIntArray(input_array, word_size)
 Unpack a VarUIntArray into individual bits, excluding padding.
 
 ```python
-arr = VarUIntArray([5, 3], word_size=3)
-bits = unpackbits(arr)
-# array([[1, 0, 1],
-#        [0, 1, 1]], dtype=uint8)
+>>> arr = VarUIntArray([5, 3], word_size=3)
+>>> unpackbits(arr)
+array([[1, 0, 1],
+       [0, 1, 1]], dtype=uint8)
 ```
 
 **Parameters:**
@@ -123,9 +133,9 @@ bits = unpackbits(arr)
 Pack a bit array into a VarUIntArray.
 
 ```python
-bits = np.array([[1, 0, 1], [0, 1, 1]], dtype=np.uint8)
-arr = packbits(bits)
-# VarUIntArray([5, 3], dtype='>u1', word_size=3)
+>>> bits = np.array([[1, 0, 1], [0, 1, 1]], dtype=np.uint8)
+>>> packbits(bits)
+VarUIntArray([5, 3], dtype=uint8, word_size=3)
 ```
 
 **Parameters:**
@@ -133,27 +143,44 @@ arr = packbits(bits)
 
 **Returns:** VarUIntArray with one fewer dimension
 
-#### `validate_varuintarray(data)`
-
-Convert various formats to VarUIntArray.
-
-```python
-# From VarUIntArray (pass-through)
-arr = VarUIntArray([1, 2, 3], word_size=10)
-validate_varuintarray(arr)  # Returns arr
-
-# From dictionary
-validate_varuintarray({'values': [1, 2, 3], 'word_size': 10})
-```
-
-#### `serialize_varuintarray(data)`
+#### `VarUIntArray.to_dict()`
 
 Serialize VarUIntArray to JSON-compatible dictionary.
 
 ```python
-arr = VarUIntArray([1, 2, 3], word_size=10)
-serialize_varuintarray(arr)
-# {'word_size': 10, 'values': [1, 2, 3]}
+>>> arr = VarUIntArray([1, 2, 3], word_size=10)
+>>> arr.to_dict()
+{'word_size': 10, 'values': [1, 2, 3]}
+```
+
+#### `VarUIntArray.from_dict(data)`
+
+Convert various formats to VarUIntArray.
+
+```python
+# From dictionary
+>>> VarUIntArray.from_dict({'values': [1, 2, 3], 'word_size': 10})
+VarUIntArray([1, 2, 3], dtype='>u2', word_size=10)
+```
+
+#### `VarUIntArray.to_json()`
+
+Serialize VarUIntArray to a JSON string.
+
+```python
+>>> arr = VarUIntArray([1, 2, 3], word_size=10)
+>>> arr.to_json()
+'{"word_size": 10, "values": [1, 2, 3]}'
+```
+
+#### `VarUIntArray.from_json(string)`
+
+Deserialize a VarUIntArray from a JSON string.
+
+```python
+>>> json_str = '{"word_size": 10, "values": [1, 2, 3]}'
+>>> VarUIntArray.from_json(json_str)
+VarUIntArray([1, 2, 3], dtype='>u2', word_size=10)
 ```
 
 ## Use Cases
@@ -164,7 +191,7 @@ Working with network protocols or file formats that use non-standard bit widths:
 
 ```python
 # 12-bit color values (common in some image formats)
-colors = VarUIntArray([4095, 2048, 0], word_size=12)
+>>> colors = VarUIntArray([4095, 2048, 0], word_size=12)
 ```
 
 ### Bit Manipulation
@@ -172,16 +199,17 @@ colors = VarUIntArray([4095, 2048, 0], word_size=12)
 Performing bitwise operations on packed data:
 
 ```python
-data = VarUIntArray([0b1010, 0b0101], word_size=4)
-mask = VarUIntArray([0b1100, 0b0011], word_size=4)
-result = data & mask  # Bitwise AND
+>>> data = VarUIntArray([0b1010, 0b0101], word_size=4)
+>>> mask = VarUIntArray([0b1100, 0b0011], word_size=4)
+>>> result = data & mask  # Bitwise AND
 ```
 
 ## Implementation Details
 
 ### Memory Layout
 
-VarUIntArray uses big-endian byte order (`'>'` dtype prefix) for consistency. Data is stored in the smallest standard NumPy unsigned integer type that can hold the specified word_size.
+- VarUIntArray uses big-endian byte order (`'>'` dtype prefix) for consistency.
+- Data is stored in the smallest standard NumPy unsigned integer type that can hold the specified word_size.
 
 ### Limitations
 
@@ -214,57 +242,36 @@ bits[:, 0] = 1 - bits[:, 0]  # Flip first bit
 # Pack back
 result = VarUIntArray.packbits(bits)
 print(result)
-# VarUIntArray([ 0, 16, 16, 31], dtype='>u1', word_size=5)
+# VarUIntArray([15, 0, 16, 31], dtype='>u1', word_size=5)
 
 # Bitwise operations
 inverted = result.invert()
 print(inverted)
-# VarUIntArray([31, 15, 15,  0], dtype='>u1', word_size=5)
+# VarUIntArray([16, 31, 15,  0], dtype='>u1', word_size=5)
 ```
 
 ### Serialization
 
 ```python
-from varuintarray import VarUIntArray, serialize_varuintarray, validate_varuintarray
-import json
-
-# Create and serialize
-arr = VarUIntArray([100, 200, 300], word_size=12)
-data = serialize_varuintarray(arr)
-json_str = json.dumps(data)
-
-# Deserialize
-loaded_data = json.loads(json_str)
-arr_restored = validate_varuintarray(loaded_data)
+>>> from varuintarray import VarUIntArray
+>>> import json
+# Serialize dict
+>>> arr = VarUIntArray([100, 200, 300], word_size=12)
+>>> serialized = arr.to_dict()
+>>> serialized
+{'word_size': 12, 'values': [100, 200, 300]}
+# Deserialize dict
+>>> VarUIntArray.from_dict(serialized)
+VarUIntArray([100, 200, 300], dtype='>u2', word_size=12)
+# Serialize JSON
+>>> serialized = arr.to_json()
+>>> serialized
+'{"word_size": 12, "values": [100, 200, 300]}'
+# Deserialize JSON
+>>> VarUIntArray.from_json(serialized)
+VarUIntArray([100, 200, 300], dtype='>u2', word_size=12)
 ```
 
 ## License
 
-BSD 3-Clause License
-
-Copyright (c) 2026, Jonathan Olsten
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-
-3. Neither the name of the copyright holder nor the names of its
-   contributors may be used to endorse or promote products derived from
-   this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+`varuintarray` is licensed under the MIT License - see the LICENSE file for details

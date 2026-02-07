@@ -16,11 +16,12 @@ Key Features:
     - Pack and unpack operations between bit arrays and integer arrays
     - Full integration with NumPy's universal functions (ufuncs)
 
+Classes:
+    VarUIntArray: NumPy subclass for variable-length unsigned integers
+
 Functions:
     packbits: Pack bit arrays into VarUIntArray
     unpackbits: Unpack VarUIntArray into bit arrays
-    validate_varuintarray: Convert dictionary to VarUIntArray
-    serialize_varuintarray: Serialize VarUIntArray to dictionary
 
 Notes:
     - All VarUIntArray instances use big-endian byte order
@@ -39,13 +40,21 @@ Examples:
 
     Packing and unpacking bits::
 
+        >>> import numpy as np
         >>> bits = np.array([[1, 0, 1], [0, 1, 1]], dtype=np.uint8)
         >>> packed = packbits(bits)
         >>> packed
-        VarUIntArray([5, 3], dtype='>u1', word_size=3)
+        VarUIntArray([5, 3], dtype=uint8, word_size=3)
         >>> unpackbits(packed)
         array([[1, 0, 1],
                [0, 1, 1]], dtype=uint8)
+
+    Serialization::
+
+        >>> arr = VarUIntArray([1, 2, 3], word_size=10)
+        >>> json_str = arr.to_json()
+        >>> restored = VarUIntArray.from_json(json_str)
+        VarUIntArray([1, 2, 3], dtype=">u2", word_size=10)
 """
 
 from varuintarray.array import VarUIntArray, packbits, unpackbits

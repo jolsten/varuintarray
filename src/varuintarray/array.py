@@ -1,3 +1,4 @@
+import json
 from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
@@ -149,8 +150,8 @@ class VarUIntArray(np.ndarray):
     def __array_wrap__(self, obj, context=None, return_scalar=False):  # noqa: FBT002
         """Wrap the result of a ufunc operation.
 
-        Special handling for bitwise operations to ensure pad bits are
-        handled correctly.
+        Special handling for operations that can set padding bits to ensure
+        they are correctly masked.
 
         Args:
             obj: The result object from the ufunc.
@@ -159,7 +160,13 @@ class VarUIntArray(np.ndarray):
 
         Returns:
             The wrapped result, with proper handling of pad bits for
-            bitwise operations.
+            operations that can overflow or set bits beyond word_size.
+
+        Notes:
+            The following ufuncs can introduce bits beyond word_size and are
+            automatically masked:
+            - Bitwise: invert, bitwise_not, bitwise_or, bitwise_xor, left_shift
+            - Arithmetic: add, subtract, multiply
         """
         if obj is self:  # for in-place operations
             result = obj
@@ -201,7 +208,7 @@ class VarUIntArray(np.ndarray):
             The result of the function call.
 
         Raises:
-            ValueError: If np.unpackbits is called with an axis argument.
+            TypeError: If np.unpackbits is called with an axis argument.
         """
         if func is np.unpackbits:
             array, *_ = args
@@ -241,6 +248,18 @@ class VarUIntArray(np.ndarray):
         return packbits(data)
 
     def to_dict(self) -> dict:
+        """Serialize this VarUIntArray to a dictionary.
+
+        Converts the VarUIntArray to a JSON-serializable dictionary format.
+
+        Returns:
+            A dictionary containing 'word_size' and 'values' keys.
+
+        Examples:
+            >>> arr = VarUIntArray([1, 2, 3], word_size=10)
+            >>> arr.to_dict()
+            {'word_size': 10, 'values': [1, 2, 3]}
+        """
         return serialize(self)
 
     @staticmethod
@@ -258,13 +277,45 @@ class VarUIntArray(np.ndarray):
             TypeError: If data cannot be converted to a VarUIntArray.
 
         Examples:
-            >>> arr = VarUIntArray([1, 2, 3], word_size=10)
-            >>> validate_varuintarray(arr) is arr
-            True
-            >>> validate_varuintarray({"values": [1, 2, 3], "word_size": 10})
+            >>> VarUIntArray.from_dict({"values": [1, 2, 3], "word_size": 10})
             VarUIntArray([1, 2, 3], dtype='>u2', word_size=10)
         """
         return validate(data)
+
+    def to_json(self) -> str:
+        """Serialize this VarUIntArray to a JSON string.
+
+        Returns:
+            A JSON string representation of the VarUIntArray.
+
+        Examples:
+            >>> arr = VarUIntArray([1, 2, 3], word_size=10)
+            >>> arr.to_json()
+            '{"word_size": 10, "values": [1, 2, 3]}'
+        """
+        return json.dumps(self.to_dict())
+
+    @classmethod
+    def from_json(cls, string: str) -> "VarUIntArray":
+        """Deserialize a VarUIntArray from a JSON string.
+
+        Args:
+            string: A JSON string containing 'word_size' and 'values' keys.
+
+        Returns:
+            A VarUIntArray instance created from the JSON data.
+
+        Raises:
+            json.JSONDecodeError: If the string is not valid JSON.
+            TypeError: If the JSON data cannot be converted to a VarUIntArray.
+
+        Examples:
+            >>> json_str = '{"word_size": 10, "values": [1, 2, 3]}'
+            >>> arr = VarUIntArray.from_json(json_str)
+            >>> arr
+            VarUIntArray([1, 2, 3], dtype='>u2', word_size=10)
+        """
+        return cls.from_dict(json.loads(string))
 
 
 def validate(data) -> VarUIntArray:
@@ -282,9 +333,9 @@ def validate(data) -> VarUIntArray:
 
     Examples:
         >>> arr = VarUIntArray([1, 2, 3], word_size=10)
-        >>> validate_varuintarray(arr) is arr
+        >>> validate(arr) is arr
         True
-        >>> validate_varuintarray({"values": [1, 2, 3], "word_size": 10})
+        >>> validate({"values": [1, 2, 3], "word_size": 10})
         VarUIntArray([1, 2, 3], dtype='>u2', word_size=10)
     """
     if isinstance(data, VarUIntArray):
@@ -312,7 +363,7 @@ def serialize(data: VarUIntArray) -> dict[str, Any]:
 
     Examples:
         >>> arr = VarUIntArray([1, 2, 3], word_size=10)
-        >>> serialize_varuintarray(arr)
+        >>> serialize(arr)
         {'word_size': 10, 'values': [1, 2, 3]}
     """
     return {
@@ -396,7 +447,7 @@ def packbits(array: np.ndarray) -> VarUIntArray:
     Examples:
         >>> bits = np.array([[1, 0, 1], [0, 1, 1]], dtype=np.uint8)
         >>> packbits(bits)
-        VarUIntArray([5, 3], dtype='>u1', word_size=3)
+        VarUIntArray([5, 3], dtype=uint8, word_size=3)
     """
     shape = array.shape
     ndim = array.ndim
