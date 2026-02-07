@@ -222,32 +222,31 @@ Performing bitwise operations on packed data:
 ### Complete Workflow
 
 ```python
-import numpy as np
-from varuintarray import VarUIntArray
+>>> import numpy as np
+>>> from varuintarray import VarUIntArray
 
 # Create some 5-bit values
-data = VarUIntArray([31, 16, 0, 15], word_size=5)
+>>> data = VarUIntArray([31, 16, 0, 15], word_size=5)
 
 # Unpack to bits
-bits = data.unpackbits()
-print(bits)
-# [[1 1 1 1 1]
-#  [1 0 0 0 0]
-#  [0 0 0 0 0]
-#  [0 1 1 1 1]]
+>>> bits = data.unpackbits()
+>>> bits
+array([[1, 1, 1, 1, 1],
+ [1, 0, 0, 0, 0],
+ [0, 0, 0, 0, 0],
+ [0, 1, 1, 1, 1]], dtype=uint8)
 
 # Flip specific bits
-bits[:, 0] = 1 - bits[:, 0]  # Flip first bit
+>>> bits[:, 0] = 1 - bits[:, 0]  # Flip first bit
 
 # Pack back
-result = VarUIntArray.packbits(bits)
-print(result)
-# VarUIntArray([15, 0, 16, 31], dtype='>u1', word_size=5)
+>>> result = VarUIntArray.packbits(bits)
+>>> result
+VarUIntArray([15, 0, 16, 31], dtype=uint8, word_size=5)
 
 # Bitwise operations
-inverted = result.invert()
-print(inverted)
-# VarUIntArray([16, 31, 15,  0], dtype='>u1', word_size=5)
+>>> result.invert()
+VarUIntArray([16, 31, 15,  0], dtype=uint8, word_size=5)
 ```
 
 ### Serialization
@@ -255,18 +254,22 @@ print(inverted)
 ```python
 >>> from varuintarray import VarUIntArray
 >>> import json
+
 # Serialize dict
 >>> arr = VarUIntArray([100, 200, 300], word_size=12)
 >>> serialized = arr.to_dict()
 >>> serialized
 {'word_size': 12, 'values': [100, 200, 300]}
+
 # Deserialize dict
 >>> VarUIntArray.from_dict(serialized)
 VarUIntArray([100, 200, 300], dtype='>u2', word_size=12)
+
 # Serialize JSON
 >>> serialized = arr.to_json()
 >>> serialized
 '{"word_size": 12, "values": [100, 200, 300]}'
+
 # Deserialize JSON
 >>> VarUIntArray.from_json(serialized)
 VarUIntArray([100, 200, 300], dtype='>u2', word_size=12)
