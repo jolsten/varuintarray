@@ -27,7 +27,7 @@ jobs:
       run: uv sync --locked --all-extras --dev
 
     - name: Run pytest
-      run: uv run pytest
+      run: uv run pytest tests/
 
     - name: Run doctest
       run: uv run python test_readme.py
