@@ -4,7 +4,7 @@ version = "1.0.1"
 description = "A variable-length unsinged integer array"
 readme = "README.md"
 authors = [
-    { name = "Jonathan Olsten", email = "jolsten@gmail.com" }
+    { name = "Jonathan Olsten", email = "jonathan.olsten@gmail.com" }
 ]
 requires-python = ">=3.9"
 dependencies = [
