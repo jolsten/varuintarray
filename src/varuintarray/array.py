@@ -147,7 +147,7 @@ class VarUIntArray(np.ndarray):
             return base[:-1] + f", word_size={self.word_size})"
         return base
 
-    def __array_wrap__(self, obj, context=None, return_scalar=False):  # noqa: FBT002
+    def __array_wrap__(self, obj, context, return_scalar, /):
         """Wrap the result of a ufunc operation.
 
         Special handling for operations that can set padding bits to ensure
