@@ -108,7 +108,25 @@ class VarUIntArray(np.ndarray):
 
         Returns:
             A new VarUIntArray instance.
+
+        Raises:
+            TypeError: If input_array has a non-numeric dtype
+                (e.g. boolean, complex, string).
         """
+        # Reject non-numeric types that have no meaningful interpretation
+        # as unsigned integers. We allow 'u' (unsigned int), 'i' (signed
+        # int — the default for Python int lists), and 'f' (float — numpy
+        # infers float64 for Python ints exceeding int64 range). The cast
+        # to the target uint dtype below will catch actual invalid values.
+        arr = np.asarray(input_array)
+        if arr.dtype.kind not in ("u", "i", "f"):
+            msg = (
+                f"VarUIntArray requires unsigned integer data, "
+                f"got dtype {arr.dtype!r} (kind='{arr.dtype.kind}'). "
+                f"Convert to an unsigned integer array first."
+            )
+            raise TypeError(msg)
+
         # Input array is an already formed ndarray instance
         # We first cast to be our class type
         dtype = ">" + _word_size_to_dtype(word_size)
@@ -153,6 +171,11 @@ class VarUIntArray(np.ndarray):
         Special handling for operations that can set padding bits to ensure
         they are correctly masked.
 
+        Boolean results (from comparison ufuncs like ``==``, ``!=``, ``<``,
+        etc.) are returned as plain ``np.ndarray`` rather than VarUIntArray,
+        since boolean arrays have no meaningful word_size or padding bits.
+        This ensures they work correctly as boolean masks for indexing.
+
         Args:
             obj: The result object from the ufunc.
             context: The ufunc context (function, arguments, output index).
@@ -174,6 +197,14 @@ class VarUIntArray(np.ndarray):
             result = obj.view(type(self))
 
         result = super().__array_wrap__(obj, context, return_scalar)
+
+        # Boolean results (from comparisons like ==, !=, <, >, etc.) should
+        # be plain ndarrays, not VarUIntArray. Boolean arrays have no
+        # meaningful word_size, and wrapping them as VarUIntArray causes
+        # downstream failures: e.g. ~bool_mask goes through the masking path
+        # and converts to uint8, breaking boolean indexing.
+        if result.dtype == np.bool_:
+            return np.asarray(result)
 
         if context is not None:
             func, args, out_i = context
