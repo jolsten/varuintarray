@@ -1,6 +1,6 @@
 [project]
 name = "varuintarray"
-version = "1.0.2"
+dynamic = ["version"]
 description = "A variable-length unsinged integer array"
 readme = "README.md"
 authors = [
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
@@ -23,3 +23,9 @@ dev = [
     "rich>=14.3.2",
     "ruff>=0.14.14",
 ]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/varuintarray/_version.py"

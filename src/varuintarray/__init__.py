@@ -57,6 +57,7 @@ Examples:
         VarUIntArray([1, 2, 3], dtype=">u2", word_size=10)
 """
 
+from varuintarray._version import version as __version__
 from varuintarray.array import VarUIntArray, packbits, unpackbits
 
-__all__ = ["VarUIntArray", "unpackbits", "packbits"]
+__all__ = ["VarUIntArray", "__version__", "unpackbits", "packbits"]
