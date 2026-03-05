@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.5] - 2026-03-05
+
+### Changed
+
+- `__array_wrap__` now uses positional-only arguments with defaults (`context=None, return_scalar=False, /`) to match the NumPy 2.x `ndarray.__array_wrap__` interface.
+
 ## [1.0.2] - 2026-02-27
 
 ### Fixed
