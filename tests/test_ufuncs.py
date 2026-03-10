@@ -28,12 +28,12 @@ class TestInvert:
     def test_invert_function(self, word_size: int, value: int, inverted: int):
         array = VarUIntArray(np.full((100, 50), value, dtype=int), word_size=word_size)
         result = np.invert(array)
-        assert [inverted == r for r in result.flatten()]
+        np.testing.assert_array_equal(result, inverted)
 
     def test_invert_method(self, word_size: int, value: int, inverted: int):
         array = VarUIntArray(np.full((100, 50), value, dtype=int), word_size=word_size)
         result = array.invert()
-        assert [inverted == r for r in result.flatten()]
+        np.testing.assert_array_equal(result, inverted)
 
 
 @pytest.mark.parametrize("word_size", [1, 4, 8, 10, 12, 16, 24, 32])
@@ -65,7 +65,12 @@ class TestInvert:
 )
 def test_ufunc_result_type(word_size: int, ufunc: Callable, args):
     dtype = _word_size_to_dtype(word_size)
-    data = np.random.default_rng().integers(0, 2**word_size, size=10, dtype=dtype)
+    rng = np.random.default_rng()
+    if ufunc is np.subtract:
+        # Avoid underflow: use values >= 1 so subtracting 1 is safe
+        data = rng.integers(1, 2**word_size, size=10, dtype=dtype)
+    else:
+        data = rng.integers(0, 2**word_size, size=10, dtype=dtype)
     array = VarUIntArray(data, word_size=word_size)
     result = ufunc(array, *args)
     assert isinstance(result, VarUIntArray)

@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.6] - 2026-03-09
+
+### Changed
+
+- **Breaking:** Operations between VarUIntArrays with different `word_size` values now raise `ValueError`. Previously, the result silently used the first operand's word_size.
+- **Breaking:** `np.subtract` now raises `OverflowError` on unsigned underflow (e.g. subtracting a larger value from a smaller one). Previously it silently wrapped.
+- **Breaking:** Comparing VarUIntArrays with different `word_size` via `==` now raises `ValueError`.
+- `validate()` and `serialize()` are now private (`_validate`, `_serialize`). Use `VarUIntArray.to_dict()` / `VarUIntArray.from_dict()` instead.
+- Removed unused `lark` dependency.
+- Fixed project description typo ("unsinged" → "unsigned").
+
+### Added
+
+- `py.typed` marker for PEP 561 type checking support.
+- CI test against `numpy==2.0.*` lower bound.
+
+### Fixed
+
+- `TestInvert` assertions now actually validate results (previously always passed due to asserting on a non-empty list).
+
 ## [1.0.5] - 2026-03-05
 
 ### Changed

@@ -13,6 +13,10 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        numpy-version: [""]
+        include:
+          - python-version: "3.9"
+            numpy-version: "numpy==2.0.*"
 
     steps:
     - uses: actions/checkout@v6
@@ -22,9 +26,13 @@ jobs:
       with:
         enable-cache: true
         python-version: ${{ matrix.python-version }}
-      
+
     - name: Install the project
       run: uv sync --locked --all-extras --dev
+
+    - name: Pin numpy lower bound
+      if: matrix.numpy-version != ''
+      run: uv pip install ${{ matrix.numpy-version }}
 
     - name: Run pytest
       run: uv run pytest tests/

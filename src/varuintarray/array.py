@@ -68,13 +68,11 @@ def _word_size_to_dtype(size: int) -> str:
 _ufuncs_that_need_masking = (
     np.invert,
     np.bitwise_invert,
-    np.bitwise_or,
     np.bitwise_xor,
     np.left_shift,
     np.add,
     np.subtract,
     np.multiply,
-    # Potentially others?
 )
 
 
@@ -153,6 +151,26 @@ class VarUIntArray(np.ndarray):
             return
         self.word_size = getattr(obj, "word_size", 0)
 
+    def __eq__(self, other):
+        """Element-wise equality, requiring matching word_size for VarUIntArrays.
+
+        Args:
+            other: The object to compare against.
+
+        Returns:
+            A boolean ndarray of element-wise comparisons.
+
+        Raises:
+            ValueError: If other is a VarUIntArray with a different word_size.
+        """
+        if isinstance(other, VarUIntArray) and self.word_size != other.word_size:
+            msg = (
+                f"Cannot compare VarUIntArrays with different word sizes: "
+                f"{self.word_size} vs {other.word_size}"
+            )
+            raise ValueError(msg)
+        return super().__eq__(other)
+
     def __repr__(self) -> str:
         """Return a string representation of the VarUIntArray.
 
@@ -208,7 +226,30 @@ class VarUIntArray(np.ndarray):
 
         if context is not None:
             func, args, out_i = context
-            # input_args = args[:func.nin]
+
+            # Check for mismatched word_size between VarUIntArray operands
+            word_sizes = {
+                a.word_size for a in args if isinstance(a, VarUIntArray)
+            }
+            if len(word_sizes) > 1:
+                msg = (
+                    f"Cannot apply {func.__name__} to VarUIntArrays with "
+                    f"different word sizes: {sorted(word_sizes)}"
+                )
+                raise ValueError(msg)
+
+            if func is np.subtract:
+                # Detect underflow: if any result value has bits set
+                # beyond word_size, the subtraction wrapped around.
+                mask = 2**self.word_size - 1
+                raw = result.view(np.ndarray)
+                if np.any(raw != np.bitwise_and(raw, mask)):
+                    msg = (
+                        f"Subtraction resulted in unsigned integer underflow "
+                        f"for word_size={self.word_size}. Use the plain "
+                        f"ndarray view if you want wrapping semantics."
+                    )
+                    raise OverflowError(msg)
 
             if func in _ufuncs_that_need_masking:
                 # Ensure ufuncs don't erroneously activate pad bits
@@ -291,7 +332,7 @@ class VarUIntArray(np.ndarray):
             >>> arr.to_dict()
             {'word_size': 10, 'values': [1, 2, 3]}
         """
-        return serialize(self)
+        return _serialize(self)
 
     @classmethod
     def from_dict(cls, data: dict) -> "VarUIntArray":
@@ -311,7 +352,7 @@ class VarUIntArray(np.ndarray):
             >>> VarUIntArray.from_dict({"values": [1, 2, 3], "word_size": 10})
             VarUIntArray([1, 2, 3], dtype='>u2', word_size=10)
         """
-        return validate(data)
+        return _validate(data)
 
     def to_json(self) -> str:
         """Serialize this VarUIntArray to a JSON string.
@@ -349,7 +390,7 @@ class VarUIntArray(np.ndarray):
         return cls.from_dict(json.loads(string))
 
 
-def validate(data) -> VarUIntArray:
+def _validate(data) -> VarUIntArray:
     """Validate and convert data to a VarUIntArray.
 
     Args:
@@ -364,9 +405,9 @@ def validate(data) -> VarUIntArray:
 
     Examples:
         >>> arr = VarUIntArray([1, 2, 3], word_size=10)
-        >>> validate(arr) is arr
+        >>> _validate(arr) is arr
         True
-        >>> validate({"values": [1, 2, 3], "word_size": 10})
+        >>> _validate({"values": [1, 2, 3], "word_size": 10})
         VarUIntArray([1, 2, 3], dtype='>u2', word_size=10)
     """
     if isinstance(data, VarUIntArray):
@@ -381,7 +422,7 @@ def validate(data) -> VarUIntArray:
     raise TypeError(msg)
 
 
-def serialize(data: VarUIntArray) -> dict[str, Any]:
+def _serialize(data: VarUIntArray) -> dict[str, Any]:
     """Serialize a VarUIntArray to a dictionary.
 
     Converts a VarUIntArray to a JSON-serializable dictionary format.
@@ -394,7 +435,7 @@ def serialize(data: VarUIntArray) -> dict[str, Any]:
 
     Examples:
         >>> arr = VarUIntArray([1, 2, 3], word_size=10)
-        >>> serialize(arr)
+        >>> _serialize(arr)
         {'word_size': 10, 'values': [1, 2, 3]}
     """
     return {
