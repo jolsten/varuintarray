@@ -1,6 +1,6 @@
 import json
 import warnings
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -77,7 +77,7 @@ _ufuncs_that_need_masking = (
 )
 
 
-def _common_word_size(arrays: list[Any]) -> int | None:
+def _common_word_size(arrays: list[Any]) -> Optional[int]:
     """Return the shared word_size if all arrays are VarUIntArrays, else None.
 
     Args:
