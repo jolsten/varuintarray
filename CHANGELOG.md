@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.7] - 2026-03-11
+
+### Added
+
+- `VarUIntArray.append(value)` method to append a single value (returns a new array).
+- `VarUIntArray.extend(values)` method to extend with multiple values (returns a new array).
+- `np.concatenate` now returns a `VarUIntArray` when all inputs are `VarUIntArray` with the same `word_size`.
+- `np.append` now returns a `VarUIntArray` when both inputs are `VarUIntArray` with the same `word_size`.
+- `np.copy` now preserves the `VarUIntArray` type and `word_size`.
+- `np.where` and `np.block` now emit a warning when called with `VarUIntArray` inputs, since they do not preserve the type.
+
 ## [1.0.6] - 2026-03-09
 
 ### Changed

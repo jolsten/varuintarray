@@ -1,4 +1,5 @@
 import json
+import warnings
 from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
@@ -74,6 +75,30 @@ _ufuncs_that_need_masking = (
     np.subtract,
     np.multiply,
 )
+
+
+def _common_word_size(arrays: list[Any]) -> int | None:
+    """Return the shared word_size if all arrays are VarUIntArrays, else None.
+
+    Args:
+        arrays: List of arrays to check.
+
+    Returns:
+        The common word_size, or None if any array is not a VarUIntArray.
+
+    Raises:
+        ValueError: If all arrays are VarUIntArrays but have different word sizes.
+    """
+    if not all(isinstance(a, VarUIntArray) for a in arrays):
+        return None
+    word_sizes = {a.word_size for a in arrays}
+    if len(word_sizes) > 1:
+        msg = (
+            f"Cannot combine VarUIntArrays with different "
+            f"word sizes: {sorted(word_sizes)}"
+        )
+        raise ValueError(msg)
+    return word_sizes.pop()
 
 
 class VarUIntArray(np.ndarray):
@@ -228,9 +253,7 @@ class VarUIntArray(np.ndarray):
             func, args, out_i = context
 
             # Check for mismatched word_size between VarUIntArray operands
-            word_sizes = {
-                a.word_size for a in args if isinstance(a, VarUIntArray)
-            }
+            word_sizes = {a.word_size for a in args if isinstance(a, VarUIntArray)}
             if len(word_sizes) > 1:
                 msg = (
                     f"Cannot apply {func.__name__} to VarUIntArrays with "
@@ -268,7 +291,9 @@ class VarUIntArray(np.ndarray):
     ) -> Any:
         """Handle numpy array function protocol.
 
-        Provides custom implementation for np.unpackbits.
+        Provides custom implementations for np.unpackbits, np.concatenate,
+        and np.append to preserve VarUIntArray type when all inputs share
+        the same word_size.
 
         Args:
             func: The numpy function being called.
@@ -281,6 +306,8 @@ class VarUIntArray(np.ndarray):
 
         Raises:
             TypeError: If np.unpackbits is called with an axis argument.
+            ValueError: If np.concatenate or np.append is called with
+                VarUIntArrays that have different word sizes.
         """
         if func is np.unpackbits:
             array, *_ = args
@@ -288,7 +315,70 @@ class VarUIntArray(np.ndarray):
                 msg = "axis keyword argument not valid when using np.unpackbits() on a VarUIntArray"
                 raise TypeError(msg)
             return unpackbits(array)
+
+        # For np.concatenate and np.append: if all inputs are VarUIntArrays
+        # with the same word_size, perform the operation on plain ndarrays
+        # and rewrap the result to preserve the VarUIntArray type.
+        # If any input is not a VarUIntArray, fall through to default numpy
+        # behavior (which will lose the word_size metadata).
+
+        if func is np.concatenate:
+            # np.concatenate takes a sequence of arrays as its first arg
+            arrays, *_ = args
+            arrays = list(arrays)
+            word_size = _common_word_size(arrays)
+            if word_size is not None:
+                result = np.concatenate([np.asarray(a) for a in arrays], **kwargs)
+                return VarUIntArray(result, word_size=word_size)
+            return super().__array_function__(func, types, args, kwargs)
+
+        if func is np.append:
+            # np.append takes two separate array arguments
+            arr, values, *_ = args
+            word_size = _common_word_size([arr, values])
+            if word_size is not None:
+                result = np.append(np.asarray(arr), np.asarray(values), **kwargs)
+                return VarUIntArray(result, word_size=word_size)
+            return super().__array_function__(func, types, args, kwargs)
+
+        if func is np.copy:
+            array, *_ = args
+            result = np.copy(np.asarray(array), **kwargs)
+            return VarUIntArray(result, word_size=self.word_size)
+
+        if func in (np.where, np.block):
+            warnings.warn(
+                f"{func.__name__}() does not preserve VarUIntArray type; "
+                f"the result will be a plain ndarray (word_size lost). "
+                f"Wrap the result with VarUIntArray(..., word_size=N) if needed.",
+                stacklevel=2,
+            )
+
         return super().__array_function__(func, types, args, kwargs)
+
+    def append(self, value: int) -> "VarUIntArray":
+        """Append a single value, returning a new VarUIntArray.
+
+        Args:
+            value: The unsigned integer value to append.
+
+        Returns:
+            A new VarUIntArray with the value appended.
+        """
+        return self.extend(value)
+
+    def extend(self, values: npt.ArrayLike) -> "VarUIntArray":
+        """Extend with multiple values, returning a new VarUIntArray.
+
+        Args:
+            values: Array-like of unsigned integer values to append.
+
+        Returns:
+            A new VarUIntArray with the values appended.
+        """
+        return VarUIntArray(
+            np.append(np.asarray(self), values), word_size=self.word_size
+        )
 
     def invert(self) -> np.ndarray:
         """Invert the bits in the array, respecting word_size.
