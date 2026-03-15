@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.0b1] - 2026-03-15
+
+### Added
+
+- `byteorder` parameter on `VarUIntArray` constructor and `packbits()`. Accepts `'big'`, `'little'`, `'native'` (or NumPy prefixes `'>'`, `'<'`, `'='`). Defaults to `'native'`.
+- `byteorder` attribute on `VarUIntArray` instances, preserved through slicing, ufuncs, concatenation, copy, `extend()`, and `append()`.
+- Serialization (`to_dict`, `to_json`) now includes `byteorder`. Deserialization (`from_dict`, `from_json`) reads it back; missing `byteorder` defaults to `'native'` for backwards compatibility.
+- `unpackbits` handles non-big-endian byte orders by converting before unpacking.
+- `packbits` produces the correct byte layout for the requested byte order.
+
 ## [1.0.7] - 2026-03-11
 
 ### Added
