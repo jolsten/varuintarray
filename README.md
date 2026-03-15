@@ -14,6 +14,7 @@ A NumPy subclass for working with variable-length unsigned integers that don't f
 
 - **Arbitrary Word Sizes**: Support for any word size from 1 to 64 bits
 - **Automatic Padding Management**: Correctly handles padding bits in bitwise operations
+- **Byte Order Control**: Specify `'big'`, `'little'`, or `'native'` byte order
 - **NumPy Integration**: Works seamlessly with NumPy ufuncs and array operations
 - **Pack/Unpack Operations**: Convert between bit arrays and packed integer arrays
 
@@ -66,6 +67,24 @@ Standard computers work with word sizes of 8, 16, 32, or 64 bits. When you need 
 2. Tracks the actual word size you care about
 3. Ensures padding bits are handled correctly in operations
 
+### Byte Order
+
+The `byteorder` parameter controls how multi-byte values are stored in memory. This matters when working with binary protocols or when interoperating with systems that expect a specific byte layout.
+
+```python
+# Big-endian (most significant byte first)
+>>> arr = VarUIntArray([0x0102], word_size=16, byteorder="big")
+>>> arr.view(np.uint8)  # raw bytes: [0x01, 0x02]
+
+# Little-endian (least significant byte first)
+>>> arr = VarUIntArray([0x0102], word_size=16, byteorder="little")
+>>> arr.view(np.uint8)  # raw bytes: [0x02, 0x01]
+```
+
+Byte order is preserved through slicing, ufuncs, concatenation, copy, serialization, and pack/unpack roundtrips. For single-byte word sizes (1-8 bits), byte order has no effect on storage but the attribute is still tracked.
+
+Accepted values: `'big'`, `'little'`, `'native'` (or NumPy prefixes `'>'`, `'<'`, `'='`).
+
 ### Padding Bit Handling
 
 The most important feature is correct handling of padding bits during bitwise operations. For example:
@@ -89,18 +108,19 @@ The most important feature is correct handling of padding bits during bitwise op
 #### Constructor
 
 ```python
-VarUIntArray(input_array, word_size)
+VarUIntArray(input_array, word_size, byteorder="native")
 ```
 
 **Parameters:**
 - `input_array`: Array-like data to convert
 - `word_size`: Number of significant bits per word (1-64)
+- `byteorder`: Byte order for the underlying dtype. Accepts `'big'`, `'little'`, `'native'` or NumPy prefixes `'>'`, `'<'`, `'='`. Defaults to `'native'`.
 
 #### Methods
 
 - `invert()`: Bitwise invert respecting word_size
 - `unpackbits()`: Unpack to individual bits (adds one dimension)
-- `packbits(data)`: Class method to pack bit array into VarUIntArray
+- `packbits(data, byteorder="native")`: Class method to pack bit array into VarUIntArray
 - `to_dict()`: Serialize to a dictionary
 - `from_dict(data)`: Static method to deserialize from a dictionary
 - `to_json()`: Serialize to a JSON string
@@ -109,6 +129,7 @@ VarUIntArray(input_array, word_size)
 #### Attributes
 
 - `word_size`: Number of significant bits per word
+- `byteorder`: Byte order prefix (`'>'`, `'<'`, or `'='`)
 
 ### Functions
 
@@ -128,7 +149,7 @@ array([[1, 0, 1],
 
 **Returns:** ndarray with shape `(*original_shape, word_size)`
 
-#### `packbits(array)`
+#### `packbits(array, byteorder="native")`
 
 Pack a bit array into a VarUIntArray.
 
@@ -140,26 +161,26 @@ VarUIntArray([5, 3], dtype=uint8, word_size=3)
 
 **Parameters:**
 - `array`: ndarray of uint8 containing 0s and 1s, where the last dimension contains bits for each word
+- `byteorder`: Byte order for the result. Accepts `'big'`, `'little'`, `'native'` or `'>'`, `'<'`, `'='`. Defaults to `'native'`.
 
 **Returns:** VarUIntArray with one fewer dimension
 
 #### `VarUIntArray.to_dict()`
 
-Serialize VarUIntArray to JSON-compatible dictionary.
+Serialize VarUIntArray to JSON-compatible dictionary. Includes `byteorder` as a human-readable string (`'big'`, `'little'`, or `'native'`).
 
 ```python
->>> arr = VarUIntArray([1, 2, 3], word_size=10)
+>>> arr = VarUIntArray([1, 2, 3], word_size=10, byteorder="big")
 >>> arr.to_dict()
-{'word_size': 10, 'values': [1, 2, 3]}
+{'word_size': 10, 'byteorder': 'big', 'values': [1, 2, 3]}
 ```
 
 #### `VarUIntArray.from_dict(data)`
 
-Convert various formats to VarUIntArray.
+Convert a dictionary to VarUIntArray. If `byteorder` is absent, defaults to `'native'` for backwards compatibility.
 
 ```python
-# From dictionary
->>> VarUIntArray.from_dict({'values': [1, 2, 3], 'word_size': 10})
+>>> VarUIntArray.from_dict({'values': [1, 2, 3], 'word_size': 10, 'byteorder': 'big'})
 VarUIntArray([1, 2, 3], dtype='>u2', word_size=10)
 ```
 
@@ -168,9 +189,9 @@ VarUIntArray([1, 2, 3], dtype='>u2', word_size=10)
 Serialize VarUIntArray to a JSON string.
 
 ```python
->>> arr = VarUIntArray([1, 2, 3], word_size=10)
+>>> arr = VarUIntArray([1, 2, 3], word_size=10, byteorder="big")
 >>> arr.to_json()
-'{"word_size": 10, "values": [1, 2, 3]}'
+'{"word_size": 10, "byteorder": "big", "values": [1, 2, 3]}'
 ```
 
 #### `VarUIntArray.from_json(string)`
@@ -178,7 +199,7 @@ Serialize VarUIntArray to a JSON string.
 Deserialize a VarUIntArray from a JSON string.
 
 ```python
->>> json_str = '{"word_size": 10, "values": [1, 2, 3]}'
+>>> json_str = '{"word_size": 10, "byteorder": "big", "values": [1, 2, 3]}'
 >>> VarUIntArray.from_json(json_str)
 VarUIntArray([1, 2, 3], dtype='>u2', word_size=10)
 ```
@@ -208,7 +229,7 @@ Performing bitwise operations on packed data:
 
 ### Memory Layout
 
-- VarUIntArray uses big-endian byte order (`'>'` dtype prefix) for consistency.
+- VarUIntArray defaults to machine-native byte order. Use the `byteorder` parameter to specify `'big'`, `'little'`, `'native'` (or NumPy prefixes `'>'`, `'<'`, `'='`).
 - Data is stored in the smallest standard NumPy unsigned integer type that can hold the specified word_size.
 
 ### Limitations
@@ -256,10 +277,10 @@ VarUIntArray([16, 31, 15,  0], dtype=uint8, word_size=5)
 >>> import json
 
 # Serialize dict
->>> arr = VarUIntArray([100, 200, 300], word_size=12)
+>>> arr = VarUIntArray([100, 200, 300], word_size=12, byteorder="big")
 >>> serialized = arr.to_dict()
 >>> serialized
-{'word_size': 12, 'values': [100, 200, 300]}
+{'word_size': 12, 'byteorder': 'big', 'values': [100, 200, 300]}
 
 # Deserialize dict
 >>> VarUIntArray.from_dict(serialized)
@@ -268,7 +289,7 @@ VarUIntArray([100, 200, 300], dtype='>u2', word_size=12)
 # Serialize JSON
 >>> serialized = arr.to_json()
 >>> serialized
-'{"word_size": 12, "values": [100, 200, 300]}'
+'{"word_size": 12, "byteorder": "big", "values": [100, 200, 300]}'
 
 # Deserialize JSON
 >>> VarUIntArray.from_json(serialized)

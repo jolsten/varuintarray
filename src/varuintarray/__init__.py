@@ -24,7 +24,8 @@ Functions:
     unpackbits: Unpack VarUIntArray into bit arrays
 
 Notes:
-    - All VarUIntArray instances use big-endian byte order
+    - Byte order defaults to machine-native; 'big', 'little', or 'native'
+      can be specified via the ``byteorder`` parameter
     - Maximum supported word size is 64 bits
     - Only unsigned integers are supported
     - Padding bits are always set to zero after operations

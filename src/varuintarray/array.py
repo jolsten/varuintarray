@@ -6,6 +6,41 @@ import numpy as np
 import numpy.typing as npt
 
 
+def _normalize_byteorder(order: str) -> str:
+    """Normalize a byte order string to a numpy dtype prefix.
+
+    Accepts both human-readable strings ('big', 'little', 'native') and
+    numpy dtype prefixes ('>', '<', '=').
+
+    Args:
+        order: Byte order specification.
+
+    Returns:
+        A single-character numpy dtype prefix: '>', '<', or '='.
+
+    Raises:
+        ValueError: If order is not a recognized byte order string.
+
+    Examples:
+        >>> _normalize_byteorder('big')
+        '>'
+        >>> _normalize_byteorder('<')
+        '<'
+        >>> _normalize_byteorder('native')
+        '='
+    """
+    mapping = {"big": ">", "little": "<", "native": "="}
+    if order in mapping:
+        return mapping[order]
+    if order in (">", "<", "="):
+        return order
+    msg = (
+        f"Invalid byte order: {order!r}. "
+        f"Use 'big'/'little'/'native' or '>'/'<'/'='."
+    )
+    raise ValueError(msg)
+
+
 def _word_size_to_machine_size(size: int) -> int:
     """Find the smallest machine size that contains the input size.
 
@@ -122,12 +157,20 @@ class VarUIntArray(np.ndarray):
     input_array: npt.ArrayLike
     word_size: int
 
-    def __new__(cls, input_array: npt.ArrayLike, word_size: int):
+    def __new__(
+        cls,
+        input_array: npt.ArrayLike,
+        word_size: int,
+        byteorder: str = "native",
+    ):
         """Create a new VarUIntArray instance.
 
         Args:
             input_array: Array-like data to be converted.
             word_size: Number of significant bits per word.
+            byteorder: Byte order for the underlying dtype. Accepts
+                'big', 'little', 'native' or '>', '<', '='.
+                Defaults to 'native' (machine byte order).
 
         Returns:
             A new VarUIntArray instance.
@@ -135,6 +178,7 @@ class VarUIntArray(np.ndarray):
         Raises:
             TypeError: If input_array has a non-numeric dtype
                 (e.g. boolean, complex, string).
+            ValueError: If byteorder is not a recognized byte order string.
         """
         # Reject non-numeric types that have no meaningful interpretation
         # as unsigned integers. We allow 'u' (unsigned int), 'i' (signed
@@ -150,16 +194,14 @@ class VarUIntArray(np.ndarray):
             )
             raise TypeError(msg)
 
-        # Input array is an already formed ndarray instance
-        # We first cast to be our class type
-        dtype = ">" + _word_size_to_dtype(word_size)
+        prefix = _normalize_byteorder(byteorder)
+        dtype = prefix + _word_size_to_dtype(word_size)
 
         obj = np.asarray(input_array, dtype=dtype).view(cls)
 
-        # add the new attribute to the created instance
         obj.word_size = word_size
+        obj.byteorder = prefix
 
-        # Finally, we must return the newly created object:
         return obj
 
     def __array_finalize__(self, obj):
@@ -175,6 +217,7 @@ class VarUIntArray(np.ndarray):
         if obj is None:
             return
         self.word_size = getattr(obj, "word_size", 0)
+        self.byteorder = getattr(obj, "byteorder", "=")
 
     def __eq__(self, other):
         """Element-wise equality, requiring matching word_size for VarUIntArrays.
@@ -278,7 +321,9 @@ class VarUIntArray(np.ndarray):
                 # Ensure ufuncs don't erroneously activate pad bits
                 mask = 2**self.word_size - 1
                 result = np.bitwise_and(result.view(np.ndarray), mask)
-                return self.__class__(result, word_size=self.word_size)
+                return self.__class__(
+                    result, word_size=self.word_size, byteorder=self.byteorder
+                )
 
         return result
 
@@ -329,7 +374,9 @@ class VarUIntArray(np.ndarray):
             word_size = _common_word_size(arrays)
             if word_size is not None:
                 result = np.concatenate([np.asarray(a) for a in arrays], **kwargs)
-                return VarUIntArray(result, word_size=word_size)
+                return VarUIntArray(
+                    result, word_size=word_size, byteorder=self.byteorder
+                )
             return super().__array_function__(func, types, args, kwargs)
 
         if func is np.append:
@@ -338,13 +385,17 @@ class VarUIntArray(np.ndarray):
             word_size = _common_word_size([arr, values])
             if word_size is not None:
                 result = np.append(np.asarray(arr), np.asarray(values), **kwargs)
-                return VarUIntArray(result, word_size=word_size)
+                return VarUIntArray(
+                    result, word_size=word_size, byteorder=self.byteorder
+                )
             return super().__array_function__(func, types, args, kwargs)
 
         if func is np.copy:
             array, *_ = args
             result = np.copy(np.asarray(array), **kwargs)
-            return VarUIntArray(result, word_size=self.word_size)
+            return VarUIntArray(
+                result, word_size=self.word_size, byteorder=self.byteorder
+            )
 
         if func in (np.where, np.block):
             warnings.warn(
@@ -377,7 +428,9 @@ class VarUIntArray(np.ndarray):
             A new VarUIntArray with the values appended.
         """
         return VarUIntArray(
-            np.append(np.asarray(self), values), word_size=self.word_size
+            np.append(np.asarray(self), values),
+            word_size=self.word_size,
+            byteorder=self.byteorder,
         )
 
     def invert(self) -> np.ndarray:
@@ -398,16 +451,21 @@ class VarUIntArray(np.ndarray):
         return unpackbits(self)
 
     @classmethod
-    def packbits(cls, data: np.ndarray) -> "VarUIntArray":
+    def packbits(
+        cls, data: np.ndarray, byteorder: str = "native"
+    ) -> "VarUIntArray":
         """Pack an np.ndarray into a VarUIntArray.
 
         Args:
             data: Array to pack. The last dimension contains bits for each word.
+            byteorder: Byte order for the result. Accepts
+                'big', 'little', 'native' or '>', '<', '='.
+                Defaults to 'native' (machine byte order).
 
         Returns:
             A VarUIntArray with packed bits.
         """
-        return packbits(data)
+        return packbits(data, byteorder=byteorder)
 
     def to_dict(self) -> dict:
         """Serialize this VarUIntArray to a dictionary.
@@ -506,7 +564,8 @@ def _validate(data) -> VarUIntArray:
     if isinstance(data, dict):
         array = data["values"]
         word_size = data["word_size"]
-        return VarUIntArray(array, word_size=word_size)
+        byteorder = data.get("byteorder", "native")
+        return VarUIntArray(array, word_size=word_size, byteorder=byteorder)
 
     msg = f"Cannot convert {data!r} to VarUIntArray"
     raise TypeError(msg)
@@ -528,8 +587,11 @@ def _serialize(data: VarUIntArray) -> dict[str, Any]:
         >>> _serialize(arr)
         {'word_size': 10, 'values': [1, 2, 3]}
     """
+    # Map numpy prefix back to human-readable name for serialization
+    prefix_to_name = {">": "big", "<": "little", "=": "native"}
     return {
         "word_size": data.word_size,
+        "byteorder": prefix_to_name.get(data.byteorder, "native"),
         "values": data.tolist(),
     }
 
@@ -566,6 +628,11 @@ def unpackbits(array: VarUIntArray) -> np.ndarray:
     shape = array.shape
     result = array.view(np.ndarray)
 
+    # np.unpackbits expects bytes in big-endian (MSB-first) order.
+    # If the data is not big-endian, convert before unpacking.
+    if result.dtype.byteorder not in (">", "|"):
+        result = result.astype(result.dtype.newbyteorder(">"))
+
     # Add a dimension such that each word is indexed in the innermost dimension
     result = result.reshape(*shape, 1)
 
@@ -587,7 +654,7 @@ def unpackbits(array: VarUIntArray) -> np.ndarray:
     return result
 
 
-def packbits(array: np.ndarray) -> VarUIntArray:
+def packbits(array: np.ndarray, byteorder: str = "native") -> VarUIntArray:
     """Pack an np.ndarray into a VarUIntArray.
 
     This works for N-dimensional arrays, but the last (innermost) dimension
@@ -600,6 +667,9 @@ def packbits(array: np.ndarray) -> VarUIntArray:
         array: The array containing bits to pack. Must have dtype np.uint8
             and contain only zeros and ones. The last dimension contains
             the bits for each word.
+        byteorder: Byte order for the result. Accepts
+            'big', 'little', 'native' or '>', '<', '='.
+            Defaults to 'native' (machine byte order).
 
     Returns:
         A VarUIntArray with packed bits. The result has one fewer dimension
@@ -611,6 +681,8 @@ def packbits(array: np.ndarray) -> VarUIntArray:
         >>> packbits(bits)
         VarUIntArray([5, 3], dtype=uint8, word_size=3)
     """
+    prefix = _normalize_byteorder(byteorder)
+
     shape = array.shape
     ndim = array.ndim
     word_size = shape[-1]
@@ -627,11 +699,17 @@ def packbits(array: np.ndarray) -> VarUIntArray:
     # Pack padded bits back into words
     result = np.packbits(result, axis=-1)
 
-    # Convert to appropriate uint dtype
-    dtype = ">" + _word_size_to_dtype(word_size)
-    result = result.view(dtype)
+    # np.packbits produces bytes in MSB-first order, which corresponds
+    # to big-endian byte layout. View as big-endian first, then convert
+    # to the target byte order if needed.
+    be_dtype = ">" + _word_size_to_dtype(word_size)
+    result = result.view(be_dtype)
+
+    if prefix != ">":
+        target_dtype = prefix + _word_size_to_dtype(word_size)
+        result = result.astype(target_dtype)
 
     # Drop innermost dimension
     result = result.squeeze(axis=-1)
 
-    return VarUIntArray(result, word_size=word_size)
+    return VarUIntArray(result, word_size=word_size, byteorder=prefix)
