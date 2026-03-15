@@ -31,7 +31,7 @@ pip install varuintarray
 ### Create a VarUIntArray with 10-bit words
 
 ```python
->>> arr = VarUIntArray([1, 2, 1023], word_size=10)
+>>> arr = VarUIntArray([1, 2, 1023], word_size=10, byteorder="big")
 >>> arr
 VarUIntArray([   1,    2, 1023], dtype='>u2', word_size=10)
 ```
@@ -52,9 +52,9 @@ VarUIntArray([1022, 1021,    0], dtype='>u2', word_size=10)
 
 ### Pack bits back into words
 ```python
->>> packed = VarUIntArray.packbits(bits)
+>>> packed = VarUIntArray.packbits(bits, byteorder="big")
 >>> packed
-VarUIntArray([  1,   2, 1023], dtype='>u2', word_size=10)
+VarUIntArray([   1,    2, 1023], dtype='>u2', word_size=10)
 ```
 
 ## Core Concepts
