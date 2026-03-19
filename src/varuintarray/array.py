@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import json
 import warnings
-from typing import Any, Callable, Iterable, Mapping, Optional
+from typing import Any, Callable, Iterable, Mapping, Optional, SupportsIndex, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -218,6 +220,13 @@ class VarUIntArray(np.ndarray):
             return
         self.word_size = getattr(obj, "word_size", 0)
         self.byteorder = getattr(obj, "byteorder", "=")
+
+    @overload
+    def __getitem__(self, key: SupportsIndex | tuple[SupportsIndex, ...], /) -> Any: ...
+    @overload
+    def __getitem__(self, key: Any, /) -> VarUIntArray: ...
+    def __getitem__(self, key: Any, /) -> Any:  # type: ignore[override]
+        return super().__getitem__(key)
 
     def __eq__(self, other):
         """Element-wise equality, requiring matching word_size for VarUIntArrays.
