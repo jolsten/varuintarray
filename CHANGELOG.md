@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.2.0b2] - 2026-03-19
+
+### Added
+
+- `__getitem__` overloads so that type checkers (pyright) infer `VarUIntArray` for slice/array indexing instead of `ndarray`.
+
 ## [1.2.0b1] - 2026-03-15
 
 ### Added
