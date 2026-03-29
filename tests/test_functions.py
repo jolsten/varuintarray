@@ -3,6 +3,7 @@ import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
+from tests.strategies import varuintarrays
 from varuintarray.array import (
     VarUIntArray,
     unpackbits,
@@ -96,3 +97,49 @@ class TestUnpackBits:
         assert isinstance(packed, VarUIntArray)
         assert array.word_size == packed.word_size
         assert array.tolist() == packed.tolist()
+
+
+@pytest.mark.parametrize(
+    "word_size, data, expected",
+    [
+        # 3-bit: 5 (101) -> 101 (5), 3 (011) -> 110 (6)
+        (3, [5, 3], [5, 6]),
+        # 8-bit: 1 (00000001) -> 10000000 (128)
+        (8, [1], [128]),
+        # 4-bit: 0 stays 0, 15 (1111) stays 15
+        (4, [0, 15], [0, 15]),
+        # 4-bit: 1 (0001) -> 1000 (8)
+        (4, [1], [8]),
+        # 1-bit: only one bit, reversal is identity
+        (1, [0, 1], [0, 1]),
+        # 2-d array
+        (3, [[5, 3], [1, 7]], [[5, 6], [4, 7]]),
+    ],
+)
+class TestReverseBits:
+    def test_reversebits(
+        self, word_size: int, data: list, expected: list
+    ):
+        arr = VarUIntArray(data, word_size=word_size)
+        result = arr.reversebits()
+        assert isinstance(result, VarUIntArray)
+        assert result.word_size == word_size
+        assert result.tolist() == expected
+
+    def test_reversebits_double_reversal(
+        self, word_size: int, data: list, expected: list
+    ):
+        """Reversing bits twice should return the original values."""
+        arr = VarUIntArray(data, word_size=word_size)
+        assert arr.reversebits().reversebits().tolist() == arr.tolist()
+
+
+@given(varuintarrays())
+def test_reversebits_involution(arr: VarUIntArray):
+    """Property: reversing bits twice is always the identity."""
+    # Mask to valid word_size range since the strategy may generate
+    # values that use bits beyond word_size.
+    mask = np.array(2**arr.word_size - 1, dtype=arr.dtype)
+    arr = VarUIntArray(np.bitwise_and(arr, mask), word_size=arr.word_size)
+    result = arr.reversebits().reversebits()
+    np.testing.assert_array_equal(result, arr)

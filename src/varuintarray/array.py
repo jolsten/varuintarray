@@ -24,11 +24,11 @@ def _normalize_byteorder(order: str) -> str:
         ValueError: If order is not a recognized byte order string.
 
     Examples:
-        >>> _normalize_byteorder('big')
+        >>> _normalize_byteorder("big")
         '>'
-        >>> _normalize_byteorder('<')
+        >>> _normalize_byteorder("<")
         '<'
-        >>> _normalize_byteorder('native')
+        >>> _normalize_byteorder("native")
         '='
     """
     mapping = {"big": ">", "little": "<", "native": "="}
@@ -36,10 +36,7 @@ def _normalize_byteorder(order: str) -> str:
         return mapping[order]
     if order in (">", "<", "="):
         return order
-    msg = (
-        f"Invalid byte order: {order!r}. "
-        f"Use 'big'/'little'/'native' or '>'/'<'/'='."
-    )
+    msg = f"Invalid byte order: {order!r}. Use 'big'/'little'/'native' or '>'/'<'/'='."
     raise ValueError(msg)
 
 
@@ -450,6 +447,20 @@ class VarUIntArray(np.ndarray):
         """
         return np.invert(self)
 
+    def reversebits(self) -> "VarUIntArray":
+        """Reverse the order of bits in each word, respecting word_size.
+
+        Returns:
+            A new VarUIntArray with the bit order of each word reversed.
+
+        Examples:
+            >>> arr = VarUIntArray([5, 3], word_size=3)
+            >>> arr.reversebits()
+            VarUIntArray([5, 6], dtype=uint8, word_size=3)
+        """
+        bits = self.unpackbits()
+        return type(self).packbits(bits[..., ::-1], byteorder=self.byteorder)
+
     def unpackbits(self) -> np.ndarray:
         """Unpack the bits in each word, respecting word_size.
 
@@ -460,9 +471,7 @@ class VarUIntArray(np.ndarray):
         return unpackbits(self)
 
     @classmethod
-    def packbits(
-        cls, data: np.ndarray, byteorder: str = "native"
-    ) -> "VarUIntArray":
+    def packbits(cls, data: np.ndarray, byteorder: str = "native") -> "VarUIntArray":
         """Pack an np.ndarray into a VarUIntArray.
 
         Args:
